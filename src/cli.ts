@@ -17,19 +17,29 @@ await runWizardIfNeeded(authStorage)
 const modelRegistry = new ModelRegistry(authStorage)
 const settingsManager = SettingsManager.create(agentDir)
 
-// Auto-select a default model if none is configured.
-// This prevents the "No model configured" error for users who logged in
-// but never explicitly ran /model to pick one.
-if (!settingsManager.getDefaultModel()) {
-  const availableModels = modelRegistry.getAvailable()
+// Auto-select a default model if none is configured, or if the configured
+// model no longer exists (e.g. stale settings referencing a retired model).
+const configuredProvider = settingsManager.getDefaultProvider()
+const configuredModel = settingsManager.getDefaultModel()
+const availableModels = modelRegistry.getAvailable()
+const configuredExists = configuredProvider && configuredModel &&
+  availableModels.some((m) => m.provider === configuredProvider && m.id === configuredModel)
+
+if (!configuredModel || !configuredExists) {
   if (availableModels.length > 0) {
-    // Prefer a mid-tier Anthropic model (sonnet), then any Anthropic, then first available
+    // Preferred default: anthropic/claude-sonnet-4-6
     const preferred =
+      availableModels.find((m) => m.provider === 'anthropic' && m.id === 'claude-sonnet-4-6') ||
       availableModels.find((m) => m.provider === 'anthropic' && m.id.includes('sonnet')) ||
       availableModels.find((m) => m.provider === 'anthropic') ||
       availableModels[0]
     settingsManager.setDefaultModelAndProvider(preferred.provider, preferred.id)
   }
+}
+
+// Default thinking level: off
+if (!settingsManager.getDefaultThinkingLevel()) {
+  settingsManager.setDefaultThinkingLevel('off')
 }
 
 // GSD always uses quiet startup — the gsd extension renders its own branded header
