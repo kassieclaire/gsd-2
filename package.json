@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "description": "GSD — Get Stuff Done coding agent",
   "license": "BUSL-1.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/glittercowboy/gsd-pi.git"
+  },
+  "homepage": "https://github.com/glittercowboy/gsd-pi#readme",
+  "bugs": {
+    "url": "https://github.com/glittercowboy/gsd-pi/issues"
+  },
   "type": "module",
   "bin": {
     "gsd": "dist/loader.js"
