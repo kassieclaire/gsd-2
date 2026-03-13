@@ -26,6 +26,7 @@ export interface GitPreferences {
   snapshots?: boolean;
   pre_merge_check?: boolean | string;
   commit_type?: string;
+  main_branch?: string;
 }
 
 export const VALID_BRANCH_NAME = /^[a-zA-Z0-9_\-\/.]+$/;
@@ -188,6 +189,11 @@ export class GitServiceImpl {
    * In the main tree: origin/HEAD symbolic-ref → main/master fallback → current branch.
    */
   getMainBranch(): string {
+    // Explicit preference takes priority (double-check validity as defense-in-depth)
+    if (this.prefs.main_branch && VALID_BRANCH_NAME.test(this.prefs.main_branch)) {
+      return this.prefs.main_branch;
+    }
+
     const wtName = detectWorktreeName(this.basePath);
     if (wtName) {
       const wtBranch = `worktree/${wtName}`;
@@ -354,8 +360,36 @@ export class GitServiceImpl {
    * Stub: to be implemented in T03.
    */
   runPreMergeCheck(): PreMergeCheckResult {
-    // TODO(S05/T03): implement pre-merge check
-    return { passed: true, skipped: true };
+    if (this.prefs.pre_merge_check === false || this.prefs.pre_merge_check === undefined) {
+      return { passed: true, skipped: true };
+    }
+
+    // Determine command: explicit string or auto-detect from package.json
+    let command: string;
+    if (typeof this.prefs.pre_merge_check === "string") {
+      command = this.prefs.pre_merge_check;
+    } else {
+      // Auto-detect: look for package.json with a test script
+      try {
+        const pkg = execSync("cat package.json", { cwd: this.basePath, encoding: "utf-8" });
+        const parsed = JSON.parse(pkg);
+        if (parsed.scripts?.test) {
+          command = "npm test";
+        } else {
+          return { passed: true, skipped: true };
+        }
+      } catch {
+        return { passed: true, skipped: true };
+      }
+    }
+
+    try {
+      execSync(command, { cwd: this.basePath, stdio: "pipe", encoding: "utf-8" });
+      return { passed: true, skipped: false, command };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { passed: false, skipped: false, command, error: msg };
+    }
   }
 
   // ─── Merge ─────────────────────────────────────────────────────────────
