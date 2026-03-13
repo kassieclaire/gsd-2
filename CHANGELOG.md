@@ -6,6 +6,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.10.3] - 2026-03-13
+
+### Fixed
+- Native binary distribution — `.node` binaries were missing from the npm tarball, causing startup crashes on all platforms since v2.10.0
+- Native loader resolution chain: tries `@gsd-build/engine-{platform}` npm package first, then local dev build, with clear error messages listing supported platforms
+
+### Added
+- Per-platform optional dependency packages (`@gsd-build/engine-*`) for macOS (ARM64/x64), Linux (x64/ARM64), and Windows (x64)
+- Cross-platform native binary CI build and publish workflow
+- Version synchronization script for lock-step platform package releases
+
 ## [2.10.2] - 2026-03-13
 
 ### Added
@@ -402,7 +413,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 - License updated to MIT
 
-[Unreleased]: https://github.com/gsd-build/gsd-2/compare/v2.10.2...HEAD
+[Unreleased]: https://github.com/gsd-build/gsd-2/compare/v2.10.3...HEAD
+[2.10.3]: https://github.com/gsd-build/gsd-2/compare/v2.10.2...v2.10.3
 [2.10.2]: https://github.com/gsd-build/gsd-2/compare/v2.10.1...v2.10.2
 [2.10.1]: https://github.com/gsd-build/gsd-2/compare/v2.10.0...v2.10.1
 [2.10.0]: https://github.com/gsd-build/gsd-2/compare/v2.9.0...v2.10.0
