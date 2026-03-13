@@ -333,4 +333,4 @@ export {
 export { copyToClipboard } from "./utils/clipboard.js";
 export { parseFrontmatter, stripFrontmatter } from "./utils/frontmatter.js";
 // Shell utilities
-export { getShellConfig } from "./utils/shell.js";
+export { getShellConfig, sanitizeCommand } from "./utils/shell.js";

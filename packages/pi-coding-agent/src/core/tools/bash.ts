@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { AgentTool } from "@gsd/pi-agent-core";
 import { type Static, Type } from "@sinclair/typebox";
 import { spawn } from "child_process";
-import { getShellConfig, getShellEnv, killProcessTree } from "../../utils/shell.js";
+import { getShellConfig, getShellEnv, killProcessTree, sanitizeCommand } from "../../utils/shell.js";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, type TruncationResult, truncateTail } from "./truncate.js";
 import type { ArtifactManager } from "../artifact-manager.js";
 
@@ -211,7 +211,7 @@ export function createBashTool(cwd: string, options?: BashToolOptions): AgentToo
 			onUpdate?,
 		) => {
 			// Apply command prefix if configured (e.g., "shopt -s expand_aliases" for alias support)
-			const resolvedCommand = commandPrefix ? `${commandPrefix}\n${command}` : command;
+			const resolvedCommand = sanitizeCommand(commandPrefix ? `${commandPrefix}\n${command}` : command);
 			const spawnContext = resolveSpawnContext(resolvedCommand, cwd, spawnHook);
 
 			return new Promise((resolve, reject) => {
