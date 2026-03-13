@@ -431,6 +431,10 @@ export class AuthStorage {
 	 * Get all credentials (for passing to getOAuthApiKey).
 	 * Returns normalized format where each provider has a single credential
 	 * (the first one) for backward compatibility with OAuth refresh.
+	 *
+	 * NOTE: For providers with multiple API keys, only the first credential is
+	 * returned. This is intentional — callers use this for OAuth refresh only,
+	 * which is always single-credential. Do not use for API key enumeration.
 	 */
 	getAll(): Record<string, AuthCredential> {
 		const result: Record<string, AuthCredential> = {};
@@ -542,7 +546,11 @@ export class AuthStorage {
 			usedIndex = hashString(sessionId) % credentials.length;
 		} else {
 			// Round-robin was already incremented in getApiKey, so the last-used
-			// index is (current - 1)
+			// index is (current - 1). Note: in a concurrent scenario where another
+			// getApiKey call fires between the original request and this backoff call,
+			// we may back off the wrong credential index. This is acceptable because:
+			// (a) pi runs single-threaded event loop, (b) backing off the wrong key
+			// is safe — it self-heals when the backoff expires.
 			const current = this.providerRoundRobinIndex.get(provider) ?? 0;
 			usedIndex = ((current - 1) % credentials.length + credentials.length) % credentials.length;
 		}
