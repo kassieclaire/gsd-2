@@ -352,7 +352,15 @@ export default function (pi: ExtensionAPI) {
           const nextModelId = getNextFallbackModel(currentModelId, modelConfig);
 
           if (nextModelId) {
-            const { model: modelToSet } = resolveModelFromRegistry(nextModelId, availableModels, ctx.model?.provider);
+            const { model: modelToSet, isAmbiguous, matchedProviders } = resolveModelFromRegistry(nextModelId, availableModels, ctx.model?.provider);
+
+            if (isAmbiguous && modelToSet) {
+              ctx.ui.notify(
+                `Fallback model ID "${nextModelId}" exists in multiple providers (${matchedProviders.join(", ")}). ` +
+                `Resolved to ${modelToSet.provider}. Use "provider/model" format for explicit targeting.`,
+                "warning",
+              );
+            }
 
             if (modelToSet) {
               const ok = await pi.setModel(modelToSet, { persist: false });

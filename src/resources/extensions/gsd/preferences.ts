@@ -517,9 +517,9 @@ export function resolveModelForUnit(unitType: string): string | undefined {
  */
 export function resolveModelFromRegistry(
   modelId: string,
-  availableModels: any[],
+  availableModels: { id: string; provider: string; [key: string]: any }[],
   currentProvider?: string,
-): { model: any | undefined; isAmbiguous: boolean; matchedProviders: string[] } {
+): { model: { id: string; provider: string; [key: string]: any } | undefined; isAmbiguous: boolean; matchedProviders: string[] } {
   const slashIdx = modelId.indexOf("/");
   if (slashIdx !== -1) {
     const provider = modelId.substring(0, slashIdx);
@@ -530,8 +530,8 @@ export function resolveModelFromRegistry(
     return { model, isAmbiguous: false, matchedProviders: model ? [model.provider] : [] };
   }
 
-  const exactProviderMatch = availableModels.find((m) => m.id === modelId && m.provider === currentProvider);
-  const allMatches = availableModels.filter((m) => m.id === modelId);
+  const exactProviderMatch = availableModels.find((m) => m.id.toLowerCase() === modelId.toLowerCase() && m.provider === currentProvider);
+  const allMatches = availableModels.filter((m) => m.id.toLowerCase() === modelId.toLowerCase());
   const anyMatch = allMatches[0];
 
   const model = exactProviderMatch ?? anyMatch;
