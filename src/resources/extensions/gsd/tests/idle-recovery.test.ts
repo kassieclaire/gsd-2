@@ -444,7 +444,17 @@ function initGitRepo(): string {
 
     try {
       execSync("git merge feature", { cwd: repo, stdio: "pipe" });
-    } catch {}
+    } catch (error) {
+      // The merge is expected to fail (non-zero exit code) due to the intentional
+      // AA conflict created for this test. Swallow the error so we can assert on
+      // the resulting unmerged state, but log it so unexpected failures are visible.
+      if (error instanceof Error) {
+        console.error(
+          "git merge failed as expected in idle-recovery AA-conflict test:",
+          error.message,
+        );
+      }
+    }
 
     const porcelain = execSync("git status --porcelain", { cwd: repo }).toString();
     assert(porcelain.includes("AA "), "precondition: AA conflict entry in porcelain output");
