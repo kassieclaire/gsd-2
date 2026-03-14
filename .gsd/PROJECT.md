@@ -37,3 +37,4 @@ See `.gsd/REQUIREMENTS.md` for the explicit capability contract, requirement sta
   - [x] S01: Build/Test Infrastructure Repair
   - [ ] S02: Production-Like Scenario Testing
   - [ ] S03: Live models.dev Verification
+- [ ] M003: Upstream Reconciliation and PR Preparation — Queued
