@@ -70,6 +70,50 @@ This file is the explicit capability and coverage contract for the project.
 - Validation: S03 — File deleted, grep shows no source references
 - Notes: Replaced by models-dev-snapshot.ts with different generation script
 
+### R007 — Registry path build/test workflow must be trustworthy
+- Class: operability
+- Status: active
+- Description: The model-registry-related code path can be built and tested through the project’s standard workflows without the current registry-specific build or resolver failures
+- Why it matters: Test files and verification only count if the normal workflow can actually run them
+- Source: user
+- Primary owning slice: M002
+- Supporting slices: none
+- Validation: Pending — standard build/test workflows execute registry-path verification successfully
+- Notes: Includes repairing registry-path-specific import, type, and test-runner seams as needed
+
+### R008 — Registry behavior must be proven through production-like startup scenarios
+- Class: quality-attribute
+- Status: active
+- Description: Model registry behavior is verified using production-like filesystem and startup scenarios covering fresh state, cache hit, stale cache, version change, snapshot fallback, offline behavior, and models.json overrides
+- Why it matters: Contract-level unit tests alone do not prove the real startup path behaves correctly
+- Source: user
+- Primary owning slice: M002
+- Supporting slices: none
+- Validation: Pending — scenario-driven tests exercise the real startup path under representative conditions
+- Notes: Prefer temporary home/cache/models.json setups over deep mocks where practical
+
+### R009 — Live models.dev verification in main suite
+- Class: quality-attribute
+- Status: active
+- Description: The main test suite includes live verification against models.dev as part of registry-path coverage
+- Why it matters: Upstream compatibility should be checked against the real service, not only fixtures
+- Source: user
+- Primary owning slice: M002
+- Supporting slices: none
+- Validation: Pending — main suite runs live models.dev verification with explicit failure surface
+- Notes: This intentionally accepts network-dependent test behavior by user choice
+
+### R010 — Model registry path quality hardening
+- Class: operability
+- Status: active
+- Description: Code review findings in the model registry path are addressed with targeted cleanup and refactoring where needed to improve correctness, maintainability, and observability without changing intended behavior
+- Why it matters: Better tests alone are not enough if the underlying design remains brittle or misleading
+- Source: user
+- Primary owning slice: M002
+- Supporting slices: none
+- Validation: Pending — review findings resolved and revised code proven by the stronger verification path
+- Notes: Scope includes adjacent infrastructure only when necessary to harden the registry path
+
 ## Validated
 
 - R001 — Fetch model registry from models.dev (S01: contract-level unit tests)
@@ -97,10 +141,14 @@ This file is the explicit capability and coverage contract for the project.
 | R004 | quality-attribute | validated | M001/S03 | none | S03 snapshot + generation script |
 | R005 | core-capability | validated | M001/S02 | none | S02 implementation + code review |
 | R006 | operability | validated | M001/S03 | none | S03 file deletion + grep verification |
+| R007 | operability | active | M002 | none | Pending |
+| R008 | quality-attribute | active | M002 | none | Pending |
+| R009 | quality-attribute | active | M002 | none | Pending |
+| R010 | operability | active | M002 | none | Pending |
 
 ## Coverage Summary
 
-- Active requirements: 0
-- Mapped to slices: 6
+- Active requirements: 4
+- Mapped to slices: 10
 - Validated: 6
 - Unmapped active requirements: 0

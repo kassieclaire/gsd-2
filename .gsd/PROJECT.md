@@ -32,3 +32,4 @@ See `.gsd/REQUIREMENTS.md` for the explicit capability contract, requirement sta
   - [x] S01: models.dev fetching with caching
   - [x] S02: Integrate into ModelRegistry
   - [x] S03: Build-time snapshot + cleanup
+- [ ] M002: Model Registry Hardening and Real-Scenario Verification — Queued
