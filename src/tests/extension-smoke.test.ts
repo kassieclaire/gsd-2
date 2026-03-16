@@ -26,9 +26,6 @@ const SKIP_EXTENSIONS = new Set([
   // rewrites .js→.ts imports and fails because core.ts doesn't exist.
   // Works fine at runtime via jiti which loads core.js directly.
   "browser-tools",
-  // Uses __dirname at module scope — valid in CJS/jiti but crashes in ESM test runner.
-  // TODO: fix voice/index.ts to use import.meta.dirname or fileURLToPath(import.meta.url)
-  "voice",
 ]);
 
 test("all bundled extensions can be imported without throwing", async () => {
