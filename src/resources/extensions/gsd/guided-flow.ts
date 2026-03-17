@@ -26,6 +26,8 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, rmSync
 import { nativeIsRepo, nativeInit, nativeAddPaths, nativeCommit } from "./native-git-bridge.js";
 import { ensureGitignore, ensurePreferences, untrackRuntimeFiles } from "./gitignore.js";
 import { loadEffectiveGSDPreferences } from "./preferences.js";
+import { detectProjectState } from "./detection.js";
+import { showProjectInit, offerMigration } from "./init-wizard.js";
 import { showConfirm } from "../shared/confirm-ui.js";
 import { loadQueueOrder, sortByQueueOrder, saveQueueOrder } from "./queue-order.js";
 
@@ -1067,6 +1069,30 @@ export async function showSmartEntry(
 ): Promise<void> {
   const stepMode = options?.step;
 
+  // ── Detection preamble — run before any bootstrap ────────────────────
+  if (!existsSync(join(basePath, ".gsd"))) {
+    const detection = detectProjectState(basePath);
+
+    // v1 .planning/ detected — offer migration before anything else
+    if (detection.state === "v1-planning" && detection.v1) {
+      const migrationChoice = await offerMigration(ctx, detection.v1);
+      if (migrationChoice === "cancel") return;
+      if (migrationChoice === "migrate") {
+        const { handleMigrate } = await import("./migrate/command.js");
+        await handleMigrate("", ctx, pi);
+        return;
+      }
+      // "fresh" — fall through to init wizard
+    }
+
+    // No .gsd/ — run the project init wizard
+    const result = await showProjectInit(ctx, pi, basePath, detection);
+    if (!result.completed) return; // User cancelled
+
+    // Init wizard bootstrapped .gsd/ — fall through to the normal flow below
+    // which will detect "no milestones" and start the discuss prompt
+  }
+
   // ── Ensure git repo exists — GSD needs it for worktree isolation ──────
   if (!nativeIsRepo(basePath)) {
     const mainBranch = loadEffectiveGSDPreferences()?.preferences?.git?.main_branch || "main";
@@ -1077,25 +1103,6 @@ export async function showSmartEntry(
   const commitDocs = loadEffectiveGSDPreferences()?.preferences?.git?.commit_docs;
   ensureGitignore(basePath, { commitDocs });
   untrackRuntimeFiles(basePath);
-
-  // ── No GSD project OR no milestone → Create first/next milestone ────
-  if (!existsSync(join(basePath, ".gsd"))) {
-    // Bootstrap .gsd/ silently — the user wants a milestone, not to "init"
-    const gsd = gsdRoot(basePath);
-    mkdirSync(join(gsd, "milestones"), { recursive: true });
-
-    // ── Create PREFERENCES.md template ────────────────────────────────
-    ensurePreferences(basePath);
-    // Only commit .gsd/ init when commit_docs is not explicitly false
-    if (commitDocs !== false) {
-      try {
-        nativeAddPaths(basePath, [".gsd", ".gitignore"]);
-        nativeCommit(basePath, "chore: init gsd");
-      } catch {
-        // nothing to commit — that's fine
-      }
-    }
-  }
 
   // ── Self-heal stale runtime records from crashed auto-mode sessions ──
   selfHealRuntimeRecords(basePath, ctx);

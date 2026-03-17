@@ -106,6 +106,8 @@ export function registerGSDCommand(pi: ExtensionAPI): void {
         { cmd: "skill-health", desc: "Skill lifecycle dashboard" },
         { cmd: "doctor", desc: "Runtime health checks with auto-fix" },
         { cmd: "forensics", desc: "Examine execution logs" },
+        { cmd: "init", desc: "Project init wizard — detect, configure, bootstrap .gsd/" },
+        { cmd: "setup", desc: "Global setup status and configuration" },
         { cmd: "migrate", desc: "Migrate a v1 .planning directory to .gsd format" },
         { cmd: "remote", desc: "Control remote auto-mode" },
         { cmd: "steer", desc: "Hard-steer plan documents during execution" },
@@ -146,6 +148,13 @@ export function registerGSDCommand(pi: ExtensionAPI): void {
         return ["start", "status", "stop", "pause", "resume", "merge"]
           .filter((cmd) => cmd.startsWith(subPrefix))
           .map((cmd) => ({ value: `parallel ${cmd}`, label: cmd }));
+      }
+
+      if (parts[0] === "setup" && parts.length <= 2) {
+        const subPrefix = parts[1] ?? "";
+        return ["llm", "search", "remote", "keys", "prefs"]
+          .filter((cmd) => cmd.startsWith(subPrefix))
+          .map((cmd) => ({ value: `setup ${cmd}`, label: cmd }));
       }
 
       if (parts[0] === "prefs" && parts.length <= 2) {
@@ -253,6 +262,25 @@ export function registerGSDCommand(pi: ExtensionAPI): void {
 
       if (trimmed === "prefs" || trimmed.startsWith("prefs ")) {
         await handlePrefs(trimmed.replace(/^prefs\s*/, "").trim(), ctx);
+        return;
+      }
+
+      if (trimmed === "init") {
+        const { detectProjectState } = await import("./detection.js");
+        const { showProjectInit, handleReinit } = await import("./init-wizard.js");
+        const basePath = projectRoot();
+        const detection = detectProjectState(basePath);
+        if (detection.state === "v2-gsd" || detection.state === "v2-gsd-empty") {
+          await handleReinit(ctx, detection);
+        } else {
+          await showProjectInit(ctx, pi, basePath, detection);
+        }
+        return;
+      }
+
+      if (trimmed === "setup" || trimmed.startsWith("setup ")) {
+        const setupArgs = trimmed.replace(/^setup\s*/, "").trim();
+        await handleSetup(setupArgs, ctx);
         return;
       }
 
@@ -623,7 +651,9 @@ function showHelp(ctx: ExtensionCommandContext): void {
     "PROJECT KNOWLEDGE",
     "  /gsd knowledge <type> <text>   Add rule, pattern, or lesson to KNOWLEDGE.md",
     "",
-    "CONFIGURATION",
+    "SETUP & CONFIGURATION",
+    "  /gsd init           Project init wizard — detect, configure, bootstrap .gsd/",
+    "  /gsd setup          Global setup status  [llm|search|remote|keys|prefs]",
     "  /gsd mode           Set workflow mode (solo/team)  [global|project]",
     "  /gsd prefs          Manage preferences  [global|project|status|wizard|setup]",
     "  /gsd config         Set API keys for external tools",
@@ -633,7 +663,7 @@ function showHelp(ctx: ExtensionCommandContext): void {
     "  /gsd doctor         Diagnose and repair .gsd/ state  [audit|fix|heal] [scope]",
     "  /gsd export         Export milestone/slice results  [--json|--markdown|--html] [--all]",
     "  /gsd cleanup        Remove merged branches or snapshots  [branches|snapshots]",
-    "  /gsd migrate        Upgrade .gsd/ structures to new format",
+    "  /gsd migrate        Migrate .planning/ (v1) to .gsd/ (v2) format",
     "  /gsd remote         Control remote auto-mode  [slack|discord|status|disconnect]",
     "  /gsd inspect        Show SQLite DB diagnostics (schema, row counts, recent entries)",
     "  /gsd update         Update GSD to the latest version via npm",
@@ -691,6 +721,59 @@ async function handleVisualize(ctx: ExtensionCommandContext): Promise<void> {
         anchor: "center",
       },
     },
+  );
+}
+
+async function handleSetup(args: string, ctx: ExtensionCommandContext): Promise<void> {
+  const { detectProjectState, hasGlobalSetup } = await import("./detection.js");
+
+  // Show current global setup status
+  const globalConfigured = hasGlobalSetup();
+  const detection = detectProjectState(projectRoot());
+
+  const statusLines = ["GSD Setup Status\n"];
+  statusLines.push(`  Global preferences: ${globalConfigured ? "configured" : "not set"}`);
+  statusLines.push(`  Project state: ${detection.state}`);
+  if (detection.projectSignals.primaryLanguage) {
+    statusLines.push(`  Detected: ${detection.projectSignals.primaryLanguage}`);
+  }
+
+  if (args === "llm" || args === "auth") {
+    ctx.ui.notify("Use /login to configure LLM authentication.", "info");
+    return;
+  }
+
+  if (args === "search") {
+    ctx.ui.notify("Use /search-provider to configure web search.", "info");
+    return;
+  }
+
+  if (args === "remote") {
+    ctx.ui.notify("Use /gsd remote to configure remote questions.", "info");
+    return;
+  }
+
+  if (args === "keys") {
+    await handleConfig(ctx);
+    return;
+  }
+
+  if (args === "prefs") {
+    await ensurePreferencesFile(getGlobalGSDPreferencesPath(), ctx, "global");
+    await handlePrefsWizard(ctx, "global");
+    return;
+  }
+
+  // Full setup summary
+  ctx.ui.notify(statusLines.join("\n"), "info");
+  ctx.ui.notify(
+    "Available setup commands:\n" +
+    "  /gsd setup llm     — LLM authentication\n" +
+    "  /gsd setup search  — Web search provider\n" +
+    "  /gsd setup remote  — Remote questions (Discord/Slack/Telegram)\n" +
+    "  /gsd setup keys    — Tool API keys\n" +
+    "  /gsd setup prefs   — Global preferences wizard",
+    "info",
   );
 }
 
