@@ -823,6 +823,21 @@ test("detectProjectSignals: pyproject dependency table extras do not trigger dep
   }
 });
 
+test("detectProjectSignals: Poetry group FastAPI dependency does not imply app framework usage", () => {
+  const dir = makeTempDir("signals-fastapi-poetry-group");
+  try {
+    writeFileSync(
+      join(dir, "pyproject.toml"),
+      '[tool.poetry.dependencies]\npython = "^3.12"\nflask = "^3.0"\n\n[tool.poetry.group.dev.dependencies]\nfastapi = "^0.115"\n',
+      "utf-8",
+    );
+    const signals = detectProjectSignals(dir);
+    assert.ok(!signals.detectedFiles.includes("dep:fastapi"), "Poetry dev-group dependencies should not imply FastAPI app usage");
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("detectProjectSignals: pyproject optional-dependency group name does not trigger dep:fastapi", () => {
   const dir = makeTempDir("signals-fastapi-pyproject-extra-name");
   try {
@@ -1193,6 +1208,28 @@ test("detectProjectSignals: Spring Boot custom version-catalog accessor emits de
     );
     const signals = detectProjectSignals(dir);
     assert.ok(signals.detectedFiles.includes("dep:spring-boot"), "custom version-catalog accessors should trigger Spring Boot detection");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("detectProjectSignals: Spring Boot settings-defined catalog accessor emits dep:spring-boot", () => {
+  const dir = makeTempDir("signals-spring-version-catalog-settings-accessor");
+  try {
+    mkdirSync(join(dir, "gradle"), { recursive: true });
+    writeFileSync(
+      join(dir, "settings.gradle.kts"),
+      'dependencyResolutionManagement { versionCatalogs { create("backendLibs") { from(files("./gradle/backend.versions.toml")) } } }',
+      "utf-8",
+    );
+    writeFileSync(join(dir, "build.gradle.kts"), "plugins { alias(backendLibs.plugins.web) }", "utf-8");
+    writeFileSync(
+      join(dir, "gradle", "backend.versions.toml"),
+      "[plugins]\nweb = { id = 'org.springframework.boot', version = '3.2.0' }\n",
+      "utf-8",
+    );
+    const signals = detectProjectSignals(dir);
+    assert.ok(signals.detectedFiles.includes("dep:spring-boot"), "settings-defined catalog accessors should trigger Spring Boot detection");
   } finally {
     cleanup(dir);
   }

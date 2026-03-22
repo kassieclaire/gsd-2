@@ -1026,8 +1026,7 @@ function extractPyprojectDependencySections(content: string): string {
 
     if (
       section === "project.optional-dependencies" ||
-      section === "tool.poetry.dependencies" ||
-      /^tool\.poetry\.group\.[^.]+\.dependencies$/.test(section)
+      section === "tool.poetry.dependencies"
     ) {
       if (section === "project.optional-dependencies") {
         const equalsIndex = line.indexOf("=");
@@ -1078,12 +1077,15 @@ function resolveVersionCatalogAccessors(
     try {
       const raw = readBounded(join(basePath, settingsFile), 64 * 1024);
       const content = stripDependencyComments(settingsFile, raw);
-      const createRe = /create\(\s*["']([A-Za-z0-9_]+)["']\s*\)\s*\{[\s\S]*?from\(files\(\s*["']([^"']+\.versions\.toml)["']\s*\)\s*\)/g;
+      const createRe = /create\(\s*["']([A-Za-z0-9_]+)["']\s*\)\s*\{[\s\S]*?([A-Za-z0-9_.-]+\.versions\.toml)["']?\s*\)\s*\)/g;
       let match: RegExpExecArray | null;
       while ((match = createRe.exec(content)) !== null) {
         const accessor = match[1].toLowerCase();
-        const catalogPath = match[2].replaceAll("\\", "/");
-        if (versionCatalogFiles.some((file) => file.replaceAll("\\", "/").endsWith(catalogPath))) {
+        const catalogBasename = match[2].replaceAll("\\", "/").split("/").pop()!;
+        if (versionCatalogFiles.some((file) => {
+          const normalized = file.replaceAll("\\", "/");
+          return normalized === catalogBasename || normalized.endsWith(`/${catalogBasename}`);
+        })) {
           accessors.add(accessor);
         }
       }
