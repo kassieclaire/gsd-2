@@ -55,6 +55,7 @@ const ROADMAP_M001 = `# M001: Recovery Test
 - All recovery tests pass
 - State matches after round-trip
 
+
 ## Slices
 
 - [x] **S01: Setup** \`risk:low\` \`depends:[]\`
@@ -311,6 +312,7 @@ async function main() {
       cleanup(base);
     }
   }
+
 
   // ─── Test (b): Idempotent recovery — double recover ────────────────────
   console.log('\n=== recover: idempotent — double recovery produces same state ===');

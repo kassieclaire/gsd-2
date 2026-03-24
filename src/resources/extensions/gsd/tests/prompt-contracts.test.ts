@@ -155,10 +155,9 @@ test("plan-slice prompt explicitly names gsd_plan_slice and gsd_plan_task as DB-
   assert.match(prompt, /DB-backed tools are the canonical write path/i);
 });
 
-test("plan-slice prompt treats direct file writes as a degraded fallback, not the default", () => {
+test("plan-slice prompt does not instruct direct file writes as a primary step", () => {
   const prompt = readPrompt("plan-slice");
-  assert.match(prompt, /degraded path, not the default/i);
-  // Should not instruct to "Write {{outputPath}}" as a primary step
+  // Should not instruct to "Write {{outputPath}}" as a primary step — tools handle rendering
   assert.doesNotMatch(prompt, /^\d+\.\s+Write `?\{\{outputPath\}\}`?\s*$/m);
 });
 
@@ -172,23 +171,28 @@ test("replan-slice prompt requires DB-backed planning state when available", () 
   assert.match(prompt, /DB-backed planning tool exists for this phase, use it as the source of truth/i);
 });
 
-test("reassess-roadmap prompt forbids roadmap-only manual edits when tool path exists", () => {
+test("reassess-roadmap prompt references gsd_reassess_roadmap tool", () => {
   const prompt = readPrompt("reassess-roadmap");
-  assert.match(prompt, /Do \*\*not\*\* bypass state with manual roadmap-only edits/i);
+  assert.match(prompt, /gsd_reassess_roadmap/);
 });
 
 // ─── Prompt migration: replan-slice → gsd_replan_slice ────────────────
 
-test("replan-slice prompt names gsd_replan_slice as canonical tool", () => {
+test("replan-slice prompt names gsd_replan_slice as the tool to use", () => {
   const prompt = readPrompt("replan-slice");
   assert.match(prompt, /gsd_replan_slice/);
-  assert.match(prompt, /canonical write path/i);
 });
 
 // ─── Prompt migration: reassess-roadmap → gsd_reassess_roadmap ───────
 
-test("reassess-roadmap prompt names gsd_reassess_roadmap as canonical tool", () => {
+test("reassess-roadmap prompt names gsd_reassess_roadmap as the tool to use", () => {
   const prompt = readPrompt("reassess-roadmap");
   assert.match(prompt, /gsd_reassess_roadmap/);
-  assert.match(prompt, /canonical write path/i);
+});
+
+test("reactive-execute prompt references tool calls instead of checkbox updates", () => {
+  const prompt = readPrompt("reactive-execute");
+  assert.doesNotMatch(prompt, /checkbox updates/);
+  assert.doesNotMatch(prompt, /checkbox edits/);
+  assert.match(prompt, /completion tool calls/);
 });

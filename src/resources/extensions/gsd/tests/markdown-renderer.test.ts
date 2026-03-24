@@ -566,6 +566,7 @@ console.log('\n── markdown-renderer: renderTaskPlanFromDb throws for missing
   }
 }
 
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Task Summary Rendering
 // ═══════════════════════════════════════════════════════════════════════════

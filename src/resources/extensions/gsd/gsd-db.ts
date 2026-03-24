@@ -623,7 +623,8 @@ function migrateSchema(db: DbAdapter): void {
 
 let currentDb: DbAdapter | null = null;
 let currentPath: string | null = null;
-let currentPid = 0;
+let currentPid: number = 0;
+let _exitHandlerRegistered = false;
 
 export function getDbProvider(): ProviderName | null {
   loadProvider();
@@ -653,12 +654,25 @@ export function openDatabase(path: string): boolean {
   currentDb = adapter;
   currentPath = path;
   currentPid = process.pid;
+
+  if (!_exitHandlerRegistered) {
+    _exitHandlerRegistered = true;
+    process.on("exit", () => { try { closeDatabase(); } catch {} });
+  }
+
   return true;
 }
 
 export function closeDatabase(): void {
   if (currentDb) {
-    try { currentDb.close(); } catch { /* swallow */ }
+    try {
+      currentDb.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    } catch { /* non-fatal — best effort before close */ }
+    try {
+      currentDb.close();
+    } catch {
+      // swallow close errors
+    }
     currentDb = null;
     currentPath = null;
     currentPid = 0;
@@ -1454,6 +1468,8 @@ export function getArtifact(path: string): ArtifactRow | null {
   if (!row) return null;
   return rowToArtifact(row);
 }
+
+// ─── Worktree DB Helpers ──────────────────────────────────────────────────
 
 export function copyWorktreeDb(srcDbPath: string, destDbPath: string): boolean {
   try {

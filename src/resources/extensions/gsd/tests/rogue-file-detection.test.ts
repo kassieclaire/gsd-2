@@ -57,6 +57,7 @@ function createSlicePlanOnDisk(basePath: string, mid: string, sid: string): stri
   return planFile;
 }
 
+
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 test("rogue detection: task summary on disk, no DB row → detected as rogue", () => {
@@ -164,6 +165,36 @@ test("rogue detection: slice summary on disk, no DB row → detected as rogue", 
     assert.equal(rogues[0].path, summaryPath);
     assert.equal(rogues[0].unitType, "complete-slice");
     assert.equal(rogues[0].unitId, "M001/S01");
+  } finally {
+    closeDatabase();
+    rmSync(basePath, { recursive: true, force: true });
+  }
+});
+
+test("rogue detection: slice summary on disk, DB row with status 'complete' → NOT rogue", () => {
+  const basePath = createTmpBase();
+  const dbPath = join(basePath, ".gsd", "gsd.db");
+  mkdirSync(join(basePath, ".gsd"), { recursive: true });
+
+  try {
+    openDatabase(dbPath);
+
+    createSliceSummaryOnDisk(basePath, "M001", "S01");
+
+    // Insert parent milestone first (foreign key constraint)
+    insertMilestone({ id: "M001" });
+
+    // Insert a slice row, then update to complete
+    insertSlice({
+      milestoneId: "M001",
+      id: "S01",
+      title: "Test Slice",
+      status: "complete",
+    });
+    updateSliceStatus("M001", "S01", "complete", new Date().toISOString());
+
+    const rogues = detectRogueFileWrites("complete-slice", "M001/S01", basePath);
+    assert.equal(rogues.length, 0, "Should NOT detect rogue when slice DB row is complete");
   } finally {
     closeDatabase();
     rmSync(basePath, { recursive: true, force: true });
