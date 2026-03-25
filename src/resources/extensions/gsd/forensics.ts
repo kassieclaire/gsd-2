@@ -28,7 +28,6 @@ import { deriveState } from "./state.js";
 import { isAutoActive } from "./auto.js";
 import { loadPrompt } from "./prompt-loader.js";
 import { gsdRoot } from "./paths.js";
-import { queryJournal } from "./journal.js";
 import { formatDuration } from "../shared/format-utils.js";
 import { getAutoWorktreePath } from "./auto-worktree.js";
 import { loadEffectiveGSDPreferences, loadGlobalGSDPreferences, getGlobalGSDPreferencesPath } from "./preferences.js";
@@ -63,13 +62,19 @@ interface ActivityLogMeta {
   newestFile: string | null;
 }
 
-/** Summary of .gsd/journal/ data for forensic investigation. */
+/**
+ * Summary of .gsd/journal/ data for forensic investigation.
+ *
+ * To avoid loading huge journal histories into memory, only the most recent
+ * daily files are fully parsed. Older files are line-counted for totals.
+ * Event counts and flow IDs reflect only recent files.
+ */
 interface JournalSummary {
-  /** Total journal entries scanned */
+  /** Total journal entries across all files (recent parsed + older line-counted) */
   totalEntries: number;
-  /** Distinct flow IDs (each = one auto-mode iteration) */
+  /** Distinct flow IDs from recent files (each = one auto-mode iteration) */
   flowCount: number;
-  /** Event counts by type */
+  /** Event counts by type (from recent files only) */
   eventCounts: Record<string, number>;
   /** Most recent journal entries (last 20) for context */
   recentEvents: { ts: string; flowId: string; eventType: string; rule?: string; unitId?: string }[];
@@ -422,6 +427,24 @@ function resolveActivityDirs(basePath: string, activeMilestone?: string | null):
 
 // ─── Journal Scanner ──────────────────────────────────────────────────────────
 
+/**
+ * Max recent journal files to fully parse for event counts and recent events.
+ * Older files are line-counted only to avoid loading huge amounts of data.
+ */
+const MAX_JOURNAL_RECENT_FILES = 3;
+
+/** Max recent events to extract for the forensic report timeline. */
+const MAX_JOURNAL_RECENT_EVENTS = 20;
+
+/**
+ * Intelligently scan journal files for forensic summary.
+ *
+ * Journal files can be huge (thousands of JSONL entries over weeks of auto-mode).
+ * Instead of loading all entries into memory:
+ * - Only fully parse the most recent N daily files (event counts, flow tracking)
+ * - Line-count older files for approximate totals (no JSON parsing)
+ * - Extract only the last 20 events for the timeline
+ */
 function scanJournalForForensics(basePath: string): JournalSummary | null {
   try {
     const journalDir = join(gsdRoot(basePath), "journal");
@@ -430,33 +453,80 @@ function scanJournalForForensics(basePath: string): JournalSummary | null {
     const files = readdirSync(journalDir).filter(f => f.endsWith(".jsonl")).sort();
     if (files.length === 0) return null;
 
-    const entries = queryJournal(basePath);
-    if (entries.length === 0) return null;
+    // Split into recent (fully parsed) and older (line-counted only)
+    const recentFiles = files.slice(-MAX_JOURNAL_RECENT_FILES);
+    const olderFiles = files.slice(0, -MAX_JOURNAL_RECENT_FILES);
 
-    // Count events by type
-    const eventCounts: Record<string, number> = {};
-    const flowIds = new Set<string>();
-    for (const e of entries) {
-      eventCounts[e.eventType] = (eventCounts[e.eventType] ?? 0) + 1;
-      flowIds.add(e.flowId);
+    // Line-count older files without parsing — avoids loading megabytes of JSON
+    let olderEntryCount = 0;
+    let oldestEntry: string | null = null;
+    for (const file of olderFiles) {
+      try {
+        const raw = readFileSync(join(journalDir, file), "utf-8");
+        const lines = raw.split("\n");
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          olderEntryCount++;
+          // Extract only the timestamp from the first non-empty line of the oldest file
+          if (!oldestEntry) {
+            try {
+              const parsed = JSON.parse(line) as { ts?: string };
+              if (parsed.ts) oldestEntry = parsed.ts;
+            } catch { /* skip malformed */ }
+          }
+        }
+      } catch { /* skip unreadable files */ }
     }
 
-    // Extract recent events (last 20) with key fields for the report
-    const recentEvents = entries.slice(-20).map(e => ({
-      ts: e.ts,
-      flowId: e.flowId,
-      eventType: e.eventType,
-      rule: e.rule,
-      unitId: e.data?.unitId as string | undefined,
-    }));
+    // Fully parse recent files for event counts and timeline
+    const eventCounts: Record<string, number> = {};
+    const flowIds = new Set<string>();
+    const recentParsedEntries: { ts: string; flowId: string; eventType: string; rule?: string; unitId?: string }[] = [];
+    let recentEntryCount = 0;
+
+    for (const file of recentFiles) {
+      try {
+        const raw = readFileSync(join(journalDir, file), "utf-8");
+        for (const line of raw.split("\n")) {
+          if (!line.trim()) continue;
+          try {
+            const entry = JSON.parse(line) as { ts: string; flowId: string; eventType: string; rule?: string; data?: Record<string, unknown> };
+            recentEntryCount++;
+            eventCounts[entry.eventType] = (eventCounts[entry.eventType] ?? 0) + 1;
+            flowIds.add(entry.flowId);
+
+            if (!oldestEntry) oldestEntry = entry.ts;
+
+            // Keep a rolling window of last N events — avoids accumulating unbounded arrays
+            recentParsedEntries.push({
+              ts: entry.ts,
+              flowId: entry.flowId,
+              eventType: entry.eventType,
+              rule: entry.rule,
+              unitId: entry.data?.unitId as string | undefined,
+            });
+            if (recentParsedEntries.length > MAX_JOURNAL_RECENT_EVENTS) {
+              recentParsedEntries.shift();
+            }
+          } catch { /* skip malformed lines */ }
+        }
+      } catch { /* skip unreadable files */ }
+    }
+
+    const totalEntries = olderEntryCount + recentEntryCount;
+    if (totalEntries === 0) return null;
+
+    const newestEntry = recentParsedEntries.length > 0
+      ? recentParsedEntries[recentParsedEntries.length - 1]!.ts
+      : null;
 
     return {
-      totalEntries: entries.length,
+      totalEntries,
       flowCount: flowIds.size,
       eventCounts,
-      recentEvents,
-      oldestEntry: entries[0]?.ts ?? null,
-      newestEntry: entries[entries.length - 1]?.ts ?? null,
+      recentEvents: recentParsedEntries,
+      oldestEntry,
+      newestEntry,
       fileCount: files.length,
     };
   } catch {

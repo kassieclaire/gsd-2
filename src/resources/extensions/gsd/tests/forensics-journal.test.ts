@@ -11,14 +11,34 @@ describe("forensics journal & activity log awareness", () => {
   const forensicsSrc = readFileSync(join(gsdDir, "forensics.ts"), "utf-8");
   const promptSrc = readFileSync(join(gsdDir, "prompts", "forensics.md"), "utf-8");
 
-  it("forensics.ts imports queryJournal from journal module", () => {
+  it("scanJournalForForensics reads journal files directly (no full queryJournal load)", () => {
+    // Must NOT use queryJournal which loads ALL entries into memory
     assert.ok(
-      forensicsSrc.includes('from "./journal.js"') || forensicsSrc.includes("from './journal.js'"),
-      "forensics.ts must import from journal.js",
+      !forensicsSrc.includes('queryJournal('),
+      "forensics.ts must NOT call queryJournal() which loads all entries at once",
+    );
+    // Must have its own journal scanning with file-level limits
+    assert.ok(
+      forensicsSrc.includes("scanJournalForForensics"),
+      "forensics.ts must have scanJournalForForensics function",
+    );
+  });
+
+  it("journal scanning limits files parsed to avoid memory bloat", () => {
+    assert.ok(
+      forensicsSrc.includes("MAX_JOURNAL_RECENT_FILES"),
+      "must have MAX_JOURNAL_RECENT_FILES constant to limit parsed files",
     );
     assert.ok(
-      forensicsSrc.includes("queryJournal"),
-      "forensics.ts must reference queryJournal",
+      forensicsSrc.includes("MAX_JOURNAL_RECENT_EVENTS"),
+      "must have MAX_JOURNAL_RECENT_EVENTS constant to limit events extracted",
+    );
+  });
+
+  it("older journal files are line-counted without full JSON parse", () => {
+    assert.ok(
+      forensicsSrc.includes("olderEntryCount") || forensicsSrc.includes("olderFiles"),
+      "must handle older files separately from recent files",
     );
   });
 
@@ -73,6 +93,41 @@ describe("forensics journal & activity log awareness", () => {
     assert.ok(
       forensicsSrc.includes("Activity Log Overview"),
       "prompt formatter must include an Activity Log Overview section",
+    );
+  });
+
+  it("activity log scanning uses tail-read with byte cap (not full file load)", () => {
+    // scanActivityLogs uses nativeParseJsonlTail + MAX_JSONL_BYTES for efficient reading
+    assert.ok(
+      forensicsSrc.includes("nativeParseJsonlTail"),
+      "activity log scanning must use nativeParseJsonlTail for tail-reading",
+    );
+    assert.ok(
+      forensicsSrc.includes("MAX_JSONL_BYTES"),
+      "activity log scanning must respect MAX_JSONL_BYTES cap",
+    );
+    // Only reads last 5 files
+    assert.ok(
+      forensicsSrc.includes("slice(-5)"),
+      "activity log scanning must limit to last 5 files",
+    );
+  });
+
+  it("activity log entries are distilled through extractTrace, not sent raw", () => {
+    assert.ok(
+      forensicsSrc.includes("extractTrace("),
+      "activity log entries must be distilled through extractTrace before reporting",
+    );
+  });
+
+  it("prompt output is hard-capped at 30KB", () => {
+    assert.ok(
+      forensicsSrc.includes("MAX_BYTES") && forensicsSrc.includes("30 * 1024"),
+      "formatReportForPrompt must have a 30KB hard cap",
+    );
+    assert.ok(
+      forensicsSrc.includes("truncated at 30KB"),
+      "prompt must show truncation message when capped",
     );
   });
 
